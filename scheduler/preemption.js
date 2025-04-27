@@ -35,7 +35,7 @@ module.exports = async function tryPreempt(k8sApi, newPod) {
           (p) => p.metadata.ownerReferences?.[0]?.uid === ownerUid && p.spec.schedulerName === SCHEDULER_NAME
         );
 
-        console.log(`⚠Preempting entire gang (job UID ${ownerUid}) of ${gangPods.length} pods`);
+        console.log(`Preempting entire gang (job UID ${ownerUid}) of ${gangPods.length} pods`);
 
         for (const p of gangPods) {
           console.log(`Deleting pod '${p.metadata.name}' from job`);
