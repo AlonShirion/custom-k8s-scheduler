@@ -17,8 +17,12 @@ async function getGangPods(k8sApi, basePod) {
 async function tryGangSchedule(gangPods, nodes, allPods, schedulingLocks) {
   const availableNodes = nodes.filter((node) => {
     const nodeName = node.metadata.name;
-    const isUsed = allPods.some((p) => p.spec.nodeName === nodeName && p.spec.schedulerName === SCHEDULER_NAME);
-    return !isUsed && !schedulingLocks.has(nodeName);
+
+    const hasPod = allPods.some(
+      (p) => p.spec.nodeName === nodeName && p.spec.schedulerName === SCHEDULER_NAME && !p.metadata.deletionTimestamp // ignore terminating pods
+    );
+
+    return !hasPod && !schedulingLocks.has(nodeName);
   });
 
   if (availableNodes.length < gangPods.length) {
@@ -36,7 +40,7 @@ async function tryGangSchedule(gangPods, nodes, allPods, schedulingLocks) {
     console.log(`Locking node '${nodeName}' for pod '${pod.metadata.name}'`);
 
     try {
-      await bindPodToNode(pod, node);
+      await bindPodToNode(pod, node, 2000);
     } finally {
       schedulingLocks.delete(nodeName);
       console.log(`Unlocking node '${nodeName}'`);
@@ -82,9 +86,42 @@ function isGangLeader(pod, gangPods) {
   return pod.metadata.name === sorted[0].metadata.name;
 }
 
+async function handleGangScheduling(pod, nodes, allPods, schedulingLocks, k8sApi) {
+  const gangPods = await getGangPods(k8sApi, pod);
+  if (!gangPods || gangPods.length === 0) return false;
+
+  const sortedGang = [...gangPods].sort((a, b) => a.metadata.name.localeCompare(b.metadata.name));
+  const leaderName = sortedGang[0].metadata.name;
+  const allUnscheduled = gangPods.every((p) => !p.spec.nodeName);
+
+  // Only leader should proceed unless gang is fully unscheduled (retry case)
+  if (pod.metadata.name !== leaderName && !allUnscheduled) {
+    console.log(`Skipping gang scheduling for '${pod.metadata.name}', handled by leader '${leaderName}'`);
+    return true; // return true to indicate handled
+  }
+
+  console.log(`Detected gang pod '${pod.metadata.name}' with ${gangPods.length} total gang pods`);
+
+  const success = await tryGangSchedule(gangPods, nodes, allPods, schedulingLocks);
+  if (success) {
+    console.log(`Gang scheduled for job '${pod.metadata.ownerReferences?.[0]?.name}'`);
+    return true;
+  }
+
+  const preempted = await tryGangPreempt(gangPods, allPods, k8sApi);
+  if (preempted) {
+    console.log(`Gang preemption complete. Waiting for job to recreate pods.`);
+    return true;
+  }
+
+  console.log(`Gang scheduling failed for job '${pod.metadata.ownerReferences?.[0]?.name}'`);
+  return true;
+}
+
 module.exports = {
   getGangPods,
   tryGangSchedule,
   tryGangPreempt,
   isGangLeader,
+  handleGangScheduling,
 };

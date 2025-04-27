@@ -38,7 +38,16 @@ function shouldSchedule(pod) {
   return pod.spec.schedulerName === SCHEDULER_NAME && !pod.spec.nodeName;
 }
 
-async function bindPodToNode(pod, node) {
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function bindPodToNode(pod, node, timeout = 0) {
+  if (timeout > 0) {
+    console.log(`Delaying bind of '${pod.metadata.name}' to '${node.metadata.name}' by ${timeout}ms...`);
+    await delay(timeout);
+  }
+
   const binding = {
     apiVersion: 'v1',
     kind: 'Binding',
@@ -57,7 +66,7 @@ async function bindPodToNode(pod, node) {
     body: binding,
   });
 
-  console.log(`✅ Scheduled pod '${pod.metadata.name}' to node '${node.metadata.name}'`);
+  console.log(`Scheduled pod '${pod.metadata.name}' to node '${node.metadata.name}'`);
 }
 
 function getPriority(pod) {

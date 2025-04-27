@@ -1,6 +1,6 @@
 require('dotenv').config();
 const tryPreempt = require('./preemption');
-const { getGangPods, tryGangSchedule, tryGangPreempt, isGangLeader } = require('./gang');
+const { handleGangScheduling } = require('./gang');
 const { k8sApi, watch, SCHEDULER_NAME, NAMESPACE_NAME, shouldSchedule, bindPodToNode } = require('./k8s-utils');
 
 // To avoid race condition of multiple pods
@@ -16,25 +16,8 @@ async function schedulePod(pod) {
     const allPods = podList.items;
 
     // Gang scheduling block
-    const gangPods = await getGangPods(k8sApi, pod);
-    if (gangPods && gangPods.length > 0) {
-      if (!isGangLeader(pod, gangPods)) {
-        console.log(`Skipping gang scheduling for '${pod.metadata.name}', handled by gang leader.`);
-        return;
-      }
-
-      const success = await tryGangSchedule(gangPods, nodes, allPods, schedulingLocks);
-      if (success) return;
-
-      const preempted = await tryGangPreempt(gangPods, allPods, k8sApi);
-      if (preempted) {
-        console.log(`Gang preemption complete. Waiting for job to recreate pods.`);
-        return;
-      }
-
-      console.log(`Gang scheduling failed for job '${pod.metadata.ownerReferences?.[0]?.name}'`);
-      return;
-    }
+    const handled = await handleGangScheduling(pod, nodes, allPods, schedulingLocks, k8sApi);
+    if (handled) return;
 
     // One-pod-per-node fallback
     for (const node of nodes) {
@@ -64,11 +47,10 @@ async function schedulePod(pod) {
       }
     }
 
-    // Fallback: try single-pod preemption
+    // Fallback: single-pod preemption
     const nodeToUse = await tryPreempt(k8sApi, pod);
     if (nodeToUse) {
-      console.log(`Waiting before binding '${pod.metadata.name}' after preemption...`);
-      setTimeout(() => bindPodToNode(pod, nodeToUse), 2000);
+      await bindPodToNode(pod, nodeToUse, 2000);
     } else {
       console.log(`No preemptable pods found for '${pod.metadata.name}'`);
     }
