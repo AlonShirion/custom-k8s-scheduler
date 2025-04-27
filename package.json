@@ -1,0 +1,9 @@
+{
+  "devDependencies": {
+    "prettier": "^3.5.3"
+  },
+  "dependencies": {
+    "@kubernetes/client-node": "^1.1.2",
+    "dotenv": "^16.5.0"
+  }
+}
