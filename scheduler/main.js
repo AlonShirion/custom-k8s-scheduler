@@ -59,7 +59,7 @@ async function schedulePod(pod) {
   }
 }
 
-// 🕵️ Start watching for pod events
+// Start watching for pod events
 function startWatching() {
   watch
     .watch(
