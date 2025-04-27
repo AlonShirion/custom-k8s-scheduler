@@ -105,7 +105,7 @@ chmod +x test/*.sh
 
 3. Or run a single test:
 ```bash
-bash test/test-low-priority.sh
+./test/test-low-priority.sh
 ```
 
 > Tests will create pods, monitor scheduling decisions, and print pass/fail status.
