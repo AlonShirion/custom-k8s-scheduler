@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: high-priority-pod
+  namespace: custom-scheduler-ns
+  annotations:
+    priority: "100"
+spec:
+  schedulerName: custom-scheduler
+  containers:
+    - name: nginx
+      image: nginx

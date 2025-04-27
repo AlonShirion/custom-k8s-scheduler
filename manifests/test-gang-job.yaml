@@ -1,0 +1,19 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gang-job
+  namespace: custom-scheduler-ns
+spec:
+  completions: 3
+  parallelism: 3
+  template:
+    metadata:
+      annotations:
+        priority: "50"
+    spec:
+      schedulerName: custom-scheduler
+      containers:
+        - name: sleep
+          image: busybox
+          command: ["sleep", "3600"]
+      restartPolicy: Never

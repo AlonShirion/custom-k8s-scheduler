@@ -1,0 +1,19 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: overcapacity-gang
+  namespace: custom-scheduler-ns
+spec:
+  completions: 5
+  parallelism: 5
+  template:
+    metadata:
+      annotations:
+        priority: "50"
+    spec:
+      schedulerName: custom-scheduler
+      containers:
+        - name: sleep
+          image: busybox
+          command: ["sleep", "3600"]
+      restartPolicy: Never

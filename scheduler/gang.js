@@ -97,12 +97,13 @@ async function handleGangScheduling(pod, nodes, allPods, schedulingLocks, k8sApi
   // Only leader should proceed unless gang is fully unscheduled (retry case)
   if (pod.metadata.name !== leaderName && !allUnscheduled) {
     console.log(`Skipping gang scheduling for '${pod.metadata.name}', handled by leader '${leaderName}'`);
-    return true; // return true to indicate handled
+    return true; // this pod was handled (skipped)
   }
 
   console.log(`Detected gang pod '${pod.metadata.name}' with ${gangPods.length} total gang pods`);
 
-  const success = await tryGangSchedule(gangPods, nodes, allPods, schedulingLocks);
+  // Try once before preemption
+  let success = await tryGangSchedule(gangPods, nodes, allPods, schedulingLocks);
   if (success) {
     console.log(`Gang scheduled for job '${pod.metadata.ownerReferences?.[0]?.name}'`);
     return true;
@@ -110,8 +111,15 @@ async function handleGangScheduling(pod, nodes, allPods, schedulingLocks, k8sApi
 
   const preempted = await tryGangPreempt(gangPods, allPods, k8sApi);
   if (preempted) {
-    console.log(`Gang preemption complete. Waiting for job to recreate pods.`);
-    return true;
+    console.log(`Gang preemption complete. Retrying scheduling...`);
+
+    // Refresh pod list after eviction
+    const refreshedPods = (await k8sApi.listNamespacedPod({ namespace: process.env.NAMESPACE_NAME })).items;
+    success = await tryGangSchedule(gangPods, nodes, refreshedPods, schedulingLocks);
+    if (success) {
+      console.log(`Gang scheduled after preemption for job '${pod.metadata.ownerReferences?.[0]?.name}'`);
+      return true;
+    }
   }
 
   console.log(`Gang scheduling failed for job '${pod.metadata.ownerReferences?.[0]?.name}'`);
